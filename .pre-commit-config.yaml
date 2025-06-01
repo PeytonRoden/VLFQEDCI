@@ -1,0 +1,7 @@
+repos:
+  - repo: https://github.com/kynan/nbstripout
+    rev: main
+    hooks:
+      - id: nbstripout
+        args: []  # <- blocks notebooks with output
+        files: \.ipynb$
