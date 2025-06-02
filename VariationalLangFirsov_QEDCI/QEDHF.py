@@ -281,6 +281,14 @@ class QED_HF:
             + lambda_vector[2] * mu_exp_z
         )
 
+        dipole_matrix = d_ao
+        #convert it to mo basis
+        dipole_matrix =  C.T @ d_ao @ C
+        d_vals, d_vecs = np.linalg.eigh(dipole_matrix)
+        self.d_vecs = d_vecs
+        self.d_eigvals = d_vals
+        self.C_dipole = C @ d_vecs
+
         self.d_exp = -d_exp #d expectation value
         self.C = C #coefficient matrix from qedhf
         self.d_n = -d_n #nuclear dipole
@@ -296,6 +304,7 @@ class QED_HF:
                 "d_exp": self.d_exp,
                 "C": self.C,
                 "C_reghf": self.C_reg_HF,
+                "C_qedhf_dipole_basis": self.C_dipole,
                 "d_n": self.d_n,
                 "d_ao": self.d_ao,
                 "d_ao_two_body": self.d_ao_two_body,

@@ -11,32 +11,34 @@ class CASCI:
   def __init__(self, mol_str, psi4_options_dict, options_dict):
 
 
-    options_dict = {}
-
-
     #parse options dict
     self.omega = options_dict["omega"]
     self.coherent_state = options_dict["coherent_state"]
     self.photon_basis_size = options_dict["photon_basis_size"]
     self.lambda_vector = np.array(options_dict["lambda_vector"] )
-    self.reference_type = options_dict["reference_type"] #qedhf or hf
+    self.reference_type = options_dict["reference_type"] #qedhf or hf or qedhf_dipole
 
 
     self.qedhf = QED_HF(mol_str, psi4_options_dict)
+
     qedhfdict = self.qedhf.qed_hf(self.lambda_vector)
 
 
     #I in physicists but we convert it to chemists
     self.ndocc = self.qedhf.ndocc
 
-    #qedhf C
-    self.C = self.qedhf.C
-    self.C_ao= self.qedhf.C
+    #qedhf C, dipole basis C, or regular hf C
 
-
-    #regular C
-    # self.C = self.qedhf.C_reg_HF
-    # self.C_ao = self.qedhf.C_reg_HF
+    if self.reference_type == 'hf':
+        #regular C
+        self.C = self.qedhf.C_reg_HF
+        self.C_ao = self.qedhf.C_reg_HF
+    elif self.reference_type == "qedhf_dipole":
+        self.C = self.qedhf.C_dipole
+        self.C_ao= self.qedhf.C_dipole
+    else:
+        self.C = self.qedhf.C
+        self.C_ao= self.qedhf.C
 
 
     self.I_ao = self.qedhf.I
@@ -578,10 +580,8 @@ class CASCI:
 
 
 
-  def calculate_CI_energy(self, excitation_level, num_active_electrons, num_active_orbitals):
+  def calculate_CI_energy(self, options_dict):
 
-
-    options_dict= {}
 
     excitation_level = options_dict["excitation_level"]
     num_active_electrons = options_dict["num_active_electrons"]
