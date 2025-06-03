@@ -384,8 +384,8 @@ class QED_CASCI_VLF:
                 #Manually set gradients for optimizer step
                 for param, grad in zip(self.model.parameters(), grads):
                     param.grad = grad
-                #     print("param ", param)
-                #     print("param.grad: ", param.grad)
+                    print("param ", param)
+                    print("param.grad: ", param.grad)
 
 
                 return loss
@@ -582,12 +582,12 @@ class QED_CASCI_VLF:
             d_ao_diag = torch.diag(self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked))
             #self.lang_firsov_params =  torch.tensor((np.random.rand(self.num_orbs) -0.5) * 0.000000001,  dtype= torch.double , requires_grad=True)
 
-
             if reference_type == "qedhf" or reference_type == "hf":
                 self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* d_ao_diag, requires_grad=True)
             else:
                 print("using dipole basis")
-                self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* torch.tensor(self.qedhf.d_eigvals)/2, requires_grad=True)
+                self.d_n = 0
+                self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* (torch.tensor(self.qedhf.d_eigvals)   )/2, requires_grad=True)
 
 
 
@@ -1022,7 +1022,7 @@ class QED_CASCI_VLF:
             self.lang_firsov_sq = torch.einsum('pq, pq -> pq', self.lang_firsov_param_matrix_spinblock, self.lang_firsov_param_matrix_spinblock)
 
 
-            # Collect all index-value pairs
+            # # Collect all index-value pairs
             indices = []
             values = []
 
@@ -1127,6 +1127,13 @@ class QED_CASCI_VLF:
                             
                         val = val* phase
                         total_val =total_val +  self.omega *  val
+
+
+                        # if i!=j:
+                        #     self.H_PF[i,j] += total_val
+                        #     self.H_PF[j,i] += self.H_PF[j,i]+total_val
+                        # elif i==j:
+                        #     self.H_PF[i,j] += self.H_PF[i,j]+total_val
 
                     if i!=j:
                         indices.append([i, j])

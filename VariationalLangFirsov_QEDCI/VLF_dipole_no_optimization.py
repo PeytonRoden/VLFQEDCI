@@ -527,7 +527,18 @@ class QED_CASCI_VLF_NO_OPT:
                 self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* d_ao_diag, requires_grad=False)
             else:
                 print("using dipole basis")
-                self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* torch.tensor(self.qedhf.d_eigvals)/2, requires_grad=False)
+
+                print("d_n")
+                print("lf params: ", (1/(np.sqrt(omega*2) ) )* torch.tensor(self.qedhf.d_eigvals)/2)
+
+                # new_d_mo = self.qedhf.C.T @ np.diag(np.ones(self.d_ao.shape[0 ]* self.d_n/(ndocc))) @self.qedhf.C 
+                # vals, vecs =  np.linalg.eigh(vals, vecs)
+
+
+                # print("new lf params: " ,   (1/(np.sqrt(omega*2) ) )* torch.tensor(vals)/2  )
+
+                self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* (torch.tensor(self.qedhf.d_eigvals)    )/2, requires_grad=True)
+
 
 
 
