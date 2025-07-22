@@ -648,6 +648,7 @@ class CASCI:
 
 
     coupled_basis = tuple(coupled_basis)
+    self.coupled_basis = coupled_basis
     #print(coupled_basis)
 
     basis_size = len(coupled_basis)
@@ -846,6 +847,81 @@ class CASCI:
     vals ,vecs = np.linalg.eigh(H_PF)
 
     return vals,vecs, H_PF
+
+
+
+  @staticmethod
+  def evaluate_adag_p_a_q(det1, det2, norbs):
+        alpha1, beta1 = det1
+        alpha2, beta2 = det2
+
+        h_block = np.ones((norbs, norbs))
+        h_mo = np.block([
+            [h_block, np.zeros((norbs, norbs))],
+            [np.zeros((norbs, norbs)), h_block]
+        ])
+
+        total_diff = CASCI.compute_diff(det1, det2)
+
+        contrib = {}  # dictionary of {(p,q): value}
+
+        if total_diff == 0:
+            # Diagonal terms: populate gamma[p,p]
+            for p in alpha1:
+                contrib[(p, p)] = h_mo[p, p]
+            for p in beta1:
+                p_shift = p + norbs
+                contrib[(p_shift, p_shift)] = h_mo[p_shift, p_shift]
+            return contrib
+
+        elif total_diff == 2:
+            phase = CASCI.compute_phase_factor(det1, det2)
+            diff_alpha = list(set(alpha1).symmetric_difference(alpha2))
+            diff_beta = list(set(beta1).symmetric_difference(beta2))
+
+            if len(diff_alpha) == 2:
+                p, q = diff_alpha
+            elif len(diff_beta) == 2:
+                p, q = diff_beta
+                p += norbs
+                q += norbs
+            else:
+                p = diff_alpha[0]
+                q = diff_beta[0] + norbs
+
+            # Ensure correct bra-ket ordering
+            beta1_shifted = tuple([b + norbs for b in beta1])
+            beta2_shifted = tuple([b + norbs for b in beta2])
+            if p not in alpha1 + beta1_shifted or q not in alpha2 + beta2_shifted:
+                p, q = q, p
+
+            contrib[(p, q)] = phase * h_mo[p, q]
+            return contrib
+
+        else:
+            return {}
+
+
+  @staticmethod
+  def compute_1rdm(ci_coeffs, coupled_determinants, norbs):
+        gamma = np.zeros((2 * norbs, 2 * norbs))
+
+        for i, (det_i, c_i) in enumerate(zip(coupled_determinants, ci_coeffs)):
+            for j, (det_j, c_j) in enumerate(zip(coupled_determinants, ci_coeffs)):
+
+                photon_i = det_i[1]
+                photon_j = det_j[1]
+                el_i = det_i[0]
+                el_j = det_j[0]
+
+
+                if photon_i == photon_j:
+                    contrib_dict = CASCI.evaluate_adag_p_a_q(el_i, el_j, norbs)
+                    for (p, q), val in contrib_dict.items():
+                        gamma[p, q] += c_i.conj() * c_j * val
+
+        return gamma
+
 
 
 

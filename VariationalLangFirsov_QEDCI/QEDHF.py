@@ -283,11 +283,42 @@ class QED_HF:
 
         dipole_matrix = d_ao
         #convert it to mo basis
-        dipole_matrix =  C.T @ d_ao @ C
+        dipole_matrix =  self.C_reg_HF.T @ d_ao @ self.C_reg_HF
+        self.dipole_matrix = dipole_matrix
         d_vals, d_vecs = np.linalg.eigh(dipole_matrix)
         self.d_vecs = d_vecs
         self.d_eigvals = d_vals
-        self.C_dipole = C @ d_vecs
+        self.C_dipole = self.C_reg_HF @ d_vecs
+
+        print("d vals; ", d_vals)
+
+
+        #dipole matrix built before field scaling
+        mu_mo_x = C.T @ mu_ao_x @ C
+        mu_mo_y = C.T @ mu_ao_y @ C
+        mu_mo_z = C.T @ mu_ao_z @ C
+        self.qedhf_lf_params =  np.diag(lambda_vector[0]* mu_mo_x + lambda_vector[1]* mu_mo_y + lambda_vector[2]* mu_mo_z)
+        #self.qedhf_lf_params= self.qedhf_lf_params/ndocc
+        #self.qedhf_lf_params = d_exp/sum(self.qedhf_lf_params) * self.qedhf_lf_params
+
+       # MO dipole matrix
+        d_mo = C.T @ d_ao @ C
+        # MO density (occupied)
+        D_mo = np.zeros(C.shape[0])
+        D_mo[:ndocc] = 2.0  # assuming RHF
+        # Q_rs = D_rr D_ss
+        gamma_pq_mo = np.diag(D_mo)
+        lf_param = np.einsum("pq,qp->p",d_mo, gamma_pq_mo)
+
+
+        print("qedhf param: ", self.qedhf_lf_params)
+        print("lf param", lf_param)
+
+
+
+
+
+
 
         self.d_exp = -d_exp #d expectation value
         self.C = C #coefficient matrix from qedhf
@@ -298,6 +329,8 @@ class QED_HF:
         self.ndocc = ndocc #number of doubly occupied molecular robitals
         self.I = I #ERI tensor in ao basis
         self.H_0 = H_0 #kinetic plus potential integrals in ao basis
+
+        self.wfn.Ca().copy(psi4.core.Matrix.from_array(self.C))
 
 
         qedhfdict = {

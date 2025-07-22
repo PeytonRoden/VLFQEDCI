@@ -8,7 +8,7 @@ Scratch directory: /tmp/
     Solid Harmonics ordering:            Gaussian
 
 *** tstart() called on CHEM239PMYXALT
-*** at Sun Jul 20 21:11:25 2025
+*** at Tue Jun 17 11:08:10 2025
 
    => Loading Basis Set <=
 
@@ -36,14 +36,14 @@ Scratch directory: /tmp/
 
        Center              X                  Y                   Z               Mass       
     ------------   -----------------  -----------------  -----------------  -----------------
-         LI           0.000000000000     0.000000000000    -0.219807017717     7.016003436600
-         H            0.000000000000     0.000000000000     1.530192982283     1.007825032230
+         LI           0.000000000000     0.000000000000    -0.175845614173     7.016003436600
+         H            0.000000000000     0.000000000000     1.224154385827     1.007825032230
 
   Running in c1 symmetry.
 
-  Rotational constants: A = ************  B =      6.24636  C =      6.24636 [cm^-1]
-  Rotational constants: A = ************  B = 187261.20068  C = 187261.20068 [MHz]
-  Nuclear repulsion =    0.907160932577143
+  Rotational constants: A = ************  B =      9.75994  C =      9.75994 [cm^-1]
+  Rotational constants: A = ************  B = 292595.62606  C = 292595.62606 [MHz]
+  Nuclear repulsion =    1.133951165721429
 
   Charge       = 0
   Multiplicity = 1
@@ -100,8 +100,8 @@ Scratch directory: /tmp/
 
     OpenMP threads:              1
 
-  Minimum eigenvalue in the overlap matrix is 3.9102217732E-01.
-  Reciprocal condition number of the overlap matrix is 2.3949029724E-01.
+  Minimum eigenvalue in the overlap matrix is 2.9515841664E-01.
+  Reciprocal condition number of the overlap matrix is 1.6877186640E-01.
     Using symmetric orthogonalization.
 
   ==> Pre-Iterations <==
@@ -120,14 +120,14 @@ Scratch directory: /tmp/
 
                         Total Energy        Delta E     RMS |[F,P]|
 
-   @RHF iter SAD:    -7.44154934645369   -7.44155e+00   0.00000e+00 
-   @RHF iter   1:    -7.83244512101030   -3.90896e-01   1.96542e-02 DIIS/ADIIS
-   @RHF iter   2:    -7.85343474611538   -2.09896e-02   1.71001e-03 DIIS/ADIIS
-   @RHF iter   3:    -7.85376057808849   -3.25832e-04   6.10435e-04 DIIS/ADIIS
-   @RHF iter   4:    -7.85383844001222   -7.78619e-05   8.41388e-05 DIIS
-   @RHF iter   5:    -7.85383960106195   -1.16105e-06   2.21147e-06 DIIS
-   @RHF iter   6:    -7.85383960178122   -7.19268e-10   4.73530e-08 DIIS
-   @RHF iter   7:    -7.85383960178137   -1.52767e-13   4.07306e-09 DIIS
+   @RHF iter SAD:    -7.46507682744787   -7.46508e+00   0.00000e+00 
+   @RHF iter   1:    -7.84589357684297   -3.80817e-01   1.74461e-02 ADIIS/DIIS
+   @RHF iter   2:    -7.86019017808193   -1.42966e-02   1.81193e-03 ADIIS/DIIS
+   @RHF iter   3:    -7.86048169917872   -2.91521e-04   5.39725e-04 ADIIS/DIIS
+   @RHF iter   4:    -7.86053860949657   -5.69103e-05   1.92556e-05 DIIS
+   @RHF iter   5:    -7.86053866105442   -5.15579e-08   4.04028e-07 DIIS
+   @RHF iter   6:    -7.86053866105703   -2.61124e-12   9.82293e-09 DIIS
+   @RHF iter   7:    -7.86053866105705   -1.33227e-14   1.29286e-09 DIIS
   Energy and wave function converged.
 
 
@@ -138,12 +138,12 @@ Scratch directory: /tmp/
 
     Doubly Occupied:                                                      
 
-       1A     -2.352882     2A     -0.272192  
+       1A     -2.345974     2A     -0.301199  
 
     Virtual:                                                              
 
-       3A      0.076651     4A      0.163708     5A      0.163708  
-       6A      0.504366  
+       3A      0.079500     4A      0.163275     5A      0.163275  
+       6A      0.596917  
 
     Final Occupation by Irrep:
               A 
@@ -151,14 +151,14 @@ Scratch directory: /tmp/
     NA   [     2 ]
     NB   [     2 ]
 
-  @RHF Final Energy:    -7.85383960178137
+  @RHF Final Energy:    -7.86053866105705
 
    => Energetics <=
 
-    Nuclear Repulsion Energy =              0.9071609325771428
-    One-Electron Energy =                 -12.2718532560324558
-    Two-Electron Energy =                   3.5108527216739431
-    Total Energy =                         -7.8538396017813685
+    Nuclear Repulsion Energy =              1.1339511657214287
+    One-Electron Energy =                 -12.6946346191582968
+    Two-Electron Energy =                   3.7001447923798194
+    Total Energy =                         -7.8605386610570482
 
 Computation Completed
 
@@ -176,18 +176,18 @@ Properties computed using the SCF density matrix
 
  L = 1.  Multiply by 2.5417464519 to convert [e a0] to [Debye]
  Dipole X            :          0.0000000            0.0000000            0.0000000
- Dipole Y            :          0.0000000            0.0000000            0.0000000
- Dipole Z            :         -3.5747613            1.6455205           -1.9292409
- Magnitude           :                                                    1.9292409
+ Dipole Y            :         -0.0000000            0.0000000           -0.0000000
+ Dipole Z            :         -3.2135366            1.3164164           -1.8971202
+ Magnitude           :                                                    1.8971202
 
  ------------------------------------------------------------------------------------
 
-*** tstop() called on CHEM239PMYXALT at Sun Jul 20 21:11:25 2025
+*** tstop() called on CHEM239PMYXALT at Tue Jun 17 11:08:10 2025
 Module time:
 	user time   =       0.07 seconds =       0.00 minutes
 	system time =       0.01 seconds =       0.00 minutes
 	total time  =          0 seconds =       0.00 minutes
 Total time:
-	user time   =    8379.26 seconds =     139.65 minutes
-	system time =    4019.15 seconds =      66.99 minutes
-	total time  =      30240 seconds =     504.00 minutes
+	user time   =      42.47 seconds =       0.71 minutes
+	system time =       8.49 seconds =       0.14 minutes
+	total time  =        288 seconds =       4.80 minutes

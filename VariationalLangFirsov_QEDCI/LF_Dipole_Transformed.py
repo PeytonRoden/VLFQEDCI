@@ -1,7 +1,5 @@
 
 
-
-
 import torch
 import torch.nn as nn
 import numpy as np
@@ -13,16 +11,16 @@ import torch_optimizer as optim
 import torch.optim as optimizer
 import os
 import random
-import matplotlib.pyplot as plt
 import itertools
+import matplotlib.pyplot as plt
 from .QEDHF import QED_HF
 
 
 
 
+#I believe it should be necessary to use the dipole basis to acheive good results here
 
-
-class QED_CASCI_VLF:
+class QED_CASCI_LF:
 
 
   def __init__(self, mol_str, psi4_options_dict, options_dict ):
@@ -30,19 +28,17 @@ class QED_CASCI_VLF:
 
     #parse options dict
     self.omega = options_dict["omega"] #frequency a.u.
-    self.coherent_state = options_dict["coherent_state"] #use coherent state basis or not, True for coherent state basis
     self.photon_basis_size = options_dict["photon_basis_size"] # need to have 2 photons basis states, 0 and 1 to see polaritons
     self.lambda_vector = np.array(options_dict["lambda_vector"] ) # for example [0.0,0.0,0.05], a.u.
-    self.reference_type = options_dict["reference_type"] #qedhf or hf or qedhf_dipole
     self.minimization_list = options_dict["minimization_list"] #list of which eigenvalues to minimize e.g. eigenvalues zero is ground state
     self.excitation_level =  options_dict["excitation_level"] # singles, doubles, triples, quadruples, ... for fci do total num electrons
     self.num_active_electrons = options_dict["num_active_electrons"] #number electrons which are active in CAS
     self.num_active_orbitals = options_dict["num_active_orbitals"] # number of active spin orbitals, divide by two to get number of active spatial orbitals
 
-    self.lf_params_guess = options_dict["lf_param_guess"]
-
-    self.model = self.CASCI_VLF( mol_str, psi4_options_dict,  self.omega, self.photon_basis_size, self.lambda_vector, self.excitation_level, self.num_active_electrons, self.num_active_orbitals, coherent_state = self.coherent_state, number_to_minimize = 4, lf_params_guess= self.lf_params_guess, reference_type = self.reference_type)
+    self.model = self.CASCI_VLF( mol_str, psi4_options_dict,  self.omega, self.photon_basis_size, self.lambda_vector, self.excitation_level, self.num_active_electrons, self.num_active_orbitals, number_to_minimize = 4,)
       
+
+
   @staticmethod
   def spin_block_tei(I):
     '''
@@ -348,70 +344,10 @@ class QED_CASCI_VLF:
     return total_diff
 
 
+  def get_energy( self ):
+    energies = self.model()
+    return energies
 
-  def grad_descent_VLF( self, n_epochs = 10, step_size = 0.001, verbose=False):
-
-    #number of epochs
-    n_epochs =  n_epochs
-
-
-    optimizer = torch.optim.LBFGS(self.model.return_params(), lr=step_size, max_iter=30, max_eval=None, tolerance_grad=1e-12, tolerance_change=1e-12, history_size=250, line_search_fn='strong_wolfe')
-    #optimizer = torch.optim.SGD(self.model.return_params(), lr=step_size, momentum =0.3)
-
-
-
-    # Hold the best model
-    best_loss = np.inf  # init to infinity
-    best_weights = None
-    history = []
-
-    energies = []
-
-    for epoch in range(n_epochs):
-        running_loss = 0
-        self.model.train()
-
-        def closure():
-
-                optimizer.zero_grad()
-                y_pred = self.model()
-                loss =  y_pred[torch.tensor(self.minimization_list)].sum()
-                #loss.backward(retain_graph=True, create_graph=True)
-                #loss.backward(create_graph=True)
-
-                # Use autograd.grad instead of backward
-                grads = torch.autograd.grad(loss, self.model.parameters(), create_graph=True, allow_unused=True)
-                #Manually set gradients for optimizer step
-                for param, grad in zip(self.model.parameters(), grads):
-                    param.grad = grad
-                    print("param ", param)
-                    print("param.grad: ", param.grad)
-
-
-                return loss
-
-        optimizer.step(closure)
-        loss = closure()
-        running_loss += loss.detach().item()
-
-        for param in self.model.parameters():
-            param.grad = None
-
-        # Clamp the parameters after the update
-        #self.clamp_parameters(self.model, min_val=-1.0, max_val=1.0)
-
-        energies.append(self.model().detach().numpy())
-
-        print("epoch-", epoch, "   loss_train------", loss.detach().item())
-        history.append(loss.detach().numpy())  # Detach before converting to NumPy
-        if loss < best_loss:
-            best_loss = loss
-            best_weights = copy.deepcopy(self.model.state_dict())
-
-    # restore model and return best accuracy
-    self.model.load_state_dict(best_weights)
-
-    return np.array(energies)
 
   def eval(self):
         with torch.no_grad():
@@ -423,7 +359,7 @@ class QED_CASCI_VLF:
   class CASCI_VLF(nn.Module):
 
 
-        def __init__(self, mol_str, psi4_options_dict,  omega, photon_basis_size, lambda_vector, excitation_level, num_active_electrons, num_active_orbitals, coherent_state = False, number_to_minimize = 4, lf_params_guess = None, reference_type = "qedhf"):
+        def __init__(self, mol_str, psi4_options_dict,  omega, photon_basis_size, lambda_vector, excitation_level, num_active_electrons, num_active_orbitals,  number_to_minimize = 4, ):
 
             super().__init__()
             self.number_to_minimize = number_to_minimize
@@ -437,16 +373,8 @@ class QED_CASCI_VLF:
             self.ndocc = self.qedhf.ndocc
 
             
-            if reference_type == 'hf':
-                #regular C
-                self.C = self.qedhf.C_reg_HF
-                self.C_ao = self.qedhf.C_reg_HF
-            elif reference_type == "qedhf_dipole":
-                self.C = self.qedhf.C_dipole
-                self.C_ao= self.qedhf.C_dipole
-            else:
-                self.C = self.qedhf.C
-                self.C_ao= self.qedhf.C
+            self.C = self.qedhf.C_dipole
+            self.C_ao= self.qedhf.C_dipole
 
 
             self.I_ao = self.qedhf.I
@@ -472,23 +400,23 @@ class QED_CASCI_VLF:
 
 
 
-            self.d_ao = torch.tensor( self.d_ao, dtype= torch.double, requires_grad=True)
-            self.I_ao = torch.tensor(self.I_ao, dtype= torch.double, requires_grad=True)
-            self.h_ao = torch.tensor(self.h_ao, dtype= torch.double, requires_grad=True)
-            #self.d_ao = torch.tensor(self.d_ao, dtype= torch.double, requires_grad=True)
-            self.q_ao = torch.tensor(self.q_ao, dtype= torch.double, requires_grad=True)
-            self.d_two_body_ao = torch.tensor(self.d_two_body , dtype= torch.double, requires_grad=True)
+            self.d_ao = torch.tensor( self.d_ao, dtype= torch.double, requires_grad=False)
+            self.I_ao = torch.tensor(self.I_ao, dtype= torch.double, requires_grad=False)
+            self.h_ao = torch.tensor(self.h_ao, dtype= torch.double, requires_grad=False)
+            #self.d_ao = torch.tensor(self.d_ao, dtype= torch.double, requires_grad=False)
+            self.q_ao = torch.tensor(self.q_ao, dtype= torch.double, requires_grad=False)
+            self.d_two_body_ao = torch.tensor(self.d_two_body , dtype= torch.double, requires_grad=False)
 
 
             Ca = self.C
             Cb = self.C
 
-            self.C_ao = torch.tensor(self.C_ao, dtype= torch.double, requires_grad=True)
-            self.C_ao_non_spin_blocked = torch.tensor(self.C_ao, dtype= torch.double, requires_grad=True)
+            self.C_ao = torch.tensor(self.C_ao, dtype= torch.double, requires_grad=False)
+            self.C_ao_non_spin_blocked = torch.tensor(self.C_ao, dtype= torch.double, requires_grad=False)
             self.C = np.block([
                         [      Ca,         np.zeros_like(Cb)],
                         [np.zeros_like(Ca),          Cb     ]])
-            self.C = torch.tensor(self.C, dtype= torch.double, requires_grad=True)
+            self.C = torch.tensor(self.C, dtype= torch.double, requires_grad=False)
 
 
             norbs = self.C_ao.shape[0]
@@ -497,7 +425,7 @@ class QED_CASCI_VLF:
             print("ndocc: ", ndocc)
 
 
-            inactive_ref, active_ref, active_virtual = QED_CASCI_VLF.generate_orbital_partitions(ndocc*2, num_active_electrons, num_active_orbitals)
+            inactive_ref, active_ref, active_virtual = QED_CASCI_LF.generate_orbital_partitions(ndocc*2, num_active_electrons, num_active_orbitals)
 
             print("Inactive Reference:", inactive_ref)
             print("Active Reference:", active_ref)
@@ -526,11 +454,11 @@ class QED_CASCI_VLF:
 
             #we have to make sure singles don't couple to reference
             #singles = CI.generate_excited_determinants(reference, virtual, 1)
-            self.singles = QED_CASCI_VLF.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N= 1)
+            self.singles = QED_CASCI_LF.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N= 1)
 
             excited_determinants = []
             for i in range(1,  excitation_level+1, 1):
-                excited_determinants_new = QED_CASCI_VLF.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N = i)
+                excited_determinants_new = QED_CASCI_LF.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N = i)
                 excited_determinants = excited_determinants+ excited_determinants_new 
 
             basis =basis+  excited_determinants 
@@ -560,48 +488,43 @@ class QED_CASCI_VLF:
 
             print("basis _size : ", basis_size)
 
-            print(type(QED_CASCI_VLF.create_creation_operator(self.photon_basis_size)))
-            self.a_dag, self.a = QED_CASCI_VLF.create_creation_operator(self.photon_basis_size) , QED_CASCI_VLF.create_annihilation_operator(self.photon_basis_size) 
+            print(type(QED_CASCI_LF.create_creation_operator(self.photon_basis_size)))
+            self.a_dag, self.a = QED_CASCI_LF.create_creation_operator(self.photon_basis_size) , QED_CASCI_LF.create_annihilation_operator(self.photon_basis_size) 
 
 
-            self.identity_photon =  torch.tensor(np.eye(self.photon_basis_size), dtype= torch.double, requires_grad=True)
-            self.identity_electronic = torch.tensor( np.eye(el_basis_size), dtype= torch.double, requires_grad=True)
+            self.identity_photon =  torch.tensor(np.eye(self.photon_basis_size), dtype= torch.double, requires_grad=False)
+            self.identity_electronic = torch.tensor( np.eye(el_basis_size), dtype= torch.double, requires_grad=False)
             self.a_dag_mult_a = self.a_dag@self.a
             self.a_dag_plus_a = self.a_dag + self.a
 
-            self.a_dag_mult_a = torch.tensor(self.a_dag_mult_a, requires_grad=True)
-            self.a_dag_plus_a = torch.tensor(self.a_dag_plus_a , requires_grad=True)
+            self.a_dag_mult_a = torch.tensor(self.a_dag_mult_a, requires_grad=False)
+            self.a_dag_plus_a = torch.tensor(self.a_dag_plus_a , requires_grad=False)
 
 
             #construuting rotation matrix, starting with random guess:    
             # # Generate a random matrix
-            self.A = nn.Parameter(torch.randn(self.num_orbs, self.num_orbs,  dtype=torch.double) * 0.0000000001,  requires_grad=True)
+            self.A = nn.Parameter(torch.randn(self.num_orbs, self.num_orbs,  dtype=torch.double) * 0.0000000001,  requires_grad=False)
 
 
 
             d_mo_diag = torch.diag(self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked))
-            #self.lang_firsov_params =  torch.tensor((np.random.rand(self.num_orbs) -0.5) * 0.000000001,  dtype= torch.double , requires_grad=True)
 
-            if reference_type == "qedhf" or reference_type == "hf":
-                #self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* d_ao_diag, requires_grad=True)
-                self.lang_firsov_params= nn.Parameter( (-1/(np.sqrt(omega*2) ) )* (d_mo_diag/2), requires_grad=True)
+            print("d_ao ", self.d_ao)
+            print("d_mo: ", self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked))
+            print("d mo diag: ", d_mo_diag)
+            print("d mo eigvals : ", self.qedhf.d_eigvals)
+            print("d_exp: ", self.d_exp)
+            print("d_n ", self.d_n)
 
-
-            else:
-                print("using dipole basis")
-                #self.d_n = 0
-                self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* (torch.tensor(self.qedhf.d_eigvals)   )/2, requires_grad=True)
+            #self.lang_firsov_params =  torch.tensor((np.random.rand(self.num_orbs) -0.5) * 0.000000001,  dtype= torch.double , requires_grad=False)
 
 
+            print("using dipole basis")
+            self.lang_firsov_params= nn.Parameter( (1/(np.sqrt(omega*2) ) )* torch.tensor(self.qedhf.d_eigvals)/2, requires_grad=False)
 
-            #gotta refigure out this part here
-            # # if lf_params_guess != None:
-            # try:
-            #     print(self.lang_firsov_params[0]) #try printing out first element, this will break it if its none
-            #     self.lang_firsov_params = nn.Parameter( torch.tensor(lf_params_guess), requires_grad=True)
+            self.d_vecs_transformation  = torch.tensor(self.qedhf.d_vecs, dtype= torch.double, requires_grad=False)
+            self.d_vecs_transformation_spinblock  = torch.tensor(np.kron(np.eye(2), self.d_vecs_transformation), dtype= torch.double, requires_grad=False)
 
-            # except:
-            #     print("can't use lf param guess")
 
 
 
@@ -759,8 +682,8 @@ class QED_CASCI_VLF:
                 max_nm = torch.maximum(n, m)
 
                 # Compute factorial terms
-                fact_min = QED_CASCI_VLF.CASCI_VLF.factorial(min_nm)
-                fact_max = QED_CASCI_VLF.CASCI_VLF.factorial(max_nm)
+                fact_min = QED_CASCI_LF.CASCI_VLF.factorial(min_nm)
+                fact_max = QED_CASCI_LF.CASCI_VLF.factorial(max_nm)
                 prefactor = torch.sqrt(fact_min / fact_max)
 
                 # Create a mask for the condition n >= m
@@ -784,7 +707,7 @@ class QED_CASCI_VLF:
             exp_term = torch.exp(-0.5 * z ** 2)
 
             # Compute Laguerre polynomial
-            laguerre = QED_CASCI_VLF.CASCI_VLF.laguerre_poly(min_nm.to(dtype=torch.int64), abs_diff.to(dtype=torch.int64), z ** 2)
+            laguerre = QED_CASCI_LF.CASCI_VLF.laguerre_poly(min_nm.to(dtype=torch.int64), abs_diff.to(dtype=torch.int64), z ** 2)
 
             return prefactor * power_term * exp_term * laguerre
         
@@ -815,10 +738,10 @@ class QED_CASCI_VLF:
             # Term 1: √m ⟨n|e^(-z(b - b†))|m-1⟩
             # Only compute for valid m values
             m_minus_1 = torch.maximum(m - 1, torch.zeros_like(m))  # Ensure m-1 doesn't go negative
-            term1 = torch.sqrt(m) * QED_CASCI_VLF.CASCI_VLF.displacement_matrix_element(n, m_minus_1, z) * m_valid_mask
+            term1 = torch.sqrt(m) * QED_CASCI_LF.CASCI_VLF.displacement_matrix_element(n, m_minus_1, z) * m_valid_mask
             
             # Term 2: √(m+1) ⟨n|e^(-z(b - b†))|m+1⟩
-            term2 = torch.sqrt(m + 1) * QED_CASCI_VLF.CASCI_VLF.displacement_matrix_element(n, m + 1, z)
+            term2 = torch.sqrt(m + 1) * QED_CASCI_LF.CASCI_VLF.displacement_matrix_element(n, m + 1, z)
 
             return term1 + term2
             
@@ -858,7 +781,7 @@ class QED_CASCI_VLF:
             z_expanded = z.view(1, 1, n_orbs, n_orbs)  # Shape: (1, 1, n_orbs, n_orbs)
 
             # Compute D_nm for all combinations using a vectorized approach
-            D_nm = QED_CASCI_VLF.CASCI_VLF.displacement_matrix_element(n, m, z_expanded)  # Shape: (n_ph, n_ph, n_orbs, n_orbs)
+            D_nm = QED_CASCI_LF.CASCI_VLF.displacement_matrix_element(n, m, z_expanded)  # Shape: (n_ph, n_ph, n_orbs, n_orbs)
 
             # Multiply h with D_nm, utilizing broadcasting
             h_expanded = h.view(1, 1, n_orbs, n_orbs)  # Shape: (1, 1, n_orbs, n_orbs)
@@ -894,7 +817,7 @@ class QED_CASCI_VLF:
             z_expanded = z.view(1, 1, n_orbs, n_orbs)  # Shape: (1, 1, n_orbs, n_orbs)
 
             # Compute D_nm for all combinations using a vectorized approach
-            D_nm = QED_CASCI_VLF.CASCI_VLF.displacement_matrix_element_b_dag_plus_b(n, m, z_expanded)  # Shape: (n_ph, n_ph, n_orbs, n_orbs)
+            D_nm = QED_CASCI_LF.CASCI_VLF.displacement_matrix_element_b_dag_plus_b(n, m, z_expanded)  # Shape: (n_ph, n_ph, n_orbs, n_orbs)
 
             # Multiply h with D_nm, utilizing broadcasting
             h_expanded = h.view(1, 1, n_orbs, n_orbs)  # Shape: (1, 1, n_orbs, n_orbs)
@@ -924,7 +847,7 @@ class QED_CASCI_VLF:
             z_expanded = z.view(1, 1, n_orbs, n_orbs)
 
             # Compute D_nm for all combinations
-            D_nm = QED_CASCI_VLF.CASCI_VLF.displacement_matrix_element(n, m, z_expanded)  # (n_ph, n_ph, n_orbs, n_orbs)
+            D_nm = QED_CASCI_LF.CASCI_VLF.displacement_matrix_element(n, m, z_expanded)  # (n_ph, n_ph, n_orbs, n_orbs)
 
             # Multiply h[p, r] * lambda_r * D_nm
             h_expanded = h.view(1, 1, n_orbs, n_orbs)  # (1,1,n_orbs,n_orbs)
@@ -970,7 +893,7 @@ class QED_CASCI_VLF:
             z_2b_expanded = z_2b.view(1, 1, n_orbs, n_orbs, n_orbs, n_orbs)
 
             # Compute D_nm for all combinations
-            D_nm_2b = QED_CASCI_VLF.CASCI_VLF.displacement_matrix_element(n, m, z_2b_expanded)  # (n_ph, n_ph, n_orbs, n_orbs, n_orbs, n_orbs)
+            D_nm_2b = QED_CASCI_LF.CASCI_VLF.displacement_matrix_element(n, m, z_2b_expanded)  # (n_ph, n_ph, n_orbs, n_orbs, n_orbs, n_orbs)
 
             # Expand V for broadcasting
             V_expanded = V.view(1, 1, n_orbs, n_orbs, n_orbs, n_orbs)
@@ -981,6 +904,71 @@ class QED_CASCI_VLF:
             return V_transformed
 
 
+        def transform_two_body_VLF_d_lang_firsov(self, V, lambda_values, n_ph):
+
+            """
+            Vectorized version of Lang-Firsov displaced two-body transformation.
+            
+            Returns:
+            Tensor of shape (n_ph, n_ph, n_orbs, n_orbs, n_orbs, n_orbs)
+            """
+            V = (V.permute(0, 2, 1, 3) - V.permute(0, 2, 3, 1)).contiguous() #antisymmetrize
+
+            n_orbs = V.shape[0]
+
+            # Compute z_2b = lambda_s + lambda_q - lambda_r - lambda_p
+            lambda_p = lambda_values.view(-1, 1, 1, 1)  # (n_orbs,1,1,1)
+            lambda_r = torch.zeros_like(lambda_values).view(1, -1, 1, 1)  # (1,n_orbs,1,1)
+            lambda_q = lambda_values.view(1, 1, -1, 1)  # (1,1,n_orbs,1)
+            lambda_s = torch.zeros_like(lambda_values).view(1, 1, 1, -1)  # (1,1,1,n_orbs)
+
+            #z_2b = lambda_s + lambda_q - lambda_r - lambda_p  # (n_orbs, n_orbs, n_orbs, n_orbs)
+            z_2b = lambda_q - lambda_p + lambda_s - lambda_r
+
+            print("z_2b")
+            print(z_2b)
+
+            # Photon indices
+            n = torch.arange(n_ph, device=V.device).view(n_ph, 1, 1, 1, 1, 1)
+            m = torch.arange(n_ph, device=V.device).view(1, n_ph, 1, 1, 1, 1)
+            z_2b_expanded = z_2b.view(1, 1, n_orbs, n_orbs, n_orbs, n_orbs)
+
+            # Compute D_nm for all combinations
+            D_nm_2b = QED_CASCI_LF.CASCI_VLF.displacement_matrix_element(n, m, z_2b_expanded)  # (n_ph, n_ph, n_orbs, n_orbs, n_orbs, n_orbs)
+
+            # Expand V for broadcasting
+            V_expanded = V.view(1, 1, n_orbs, n_orbs, n_orbs, n_orbs)
+
+            # Final transformed two-body tensor
+            V_transformed = V_expanded * D_nm_2b
+
+            return V_transformed
+
+
+
+
+        def transform_photon_transformed_integrals_to_new_orbital_basis_onebody( self, integrals_to_transform, new_C_spinblocked, n_ph):
+
+            transformed_ints = torch.zeros_like(integrals_to_transform)
+
+            for n in range(0,n_ph):
+                for m in range(0, n_ph):
+                    transformed_ints[n,m] =     self.ao_to_mo(  integrals_to_transform[n,m], new_C_spinblocked)
+
+            return transformed_ints    
+
+
+        def transform_photon_transformed_integrals_to_new_orbital_basis_twobody( self, integrals_to_transform, new_C_spinblocked, n_ph):
+
+            transformed_ints = torch.zeros_like(integrals_to_transform)
+
+            for n in range(0,n_ph):
+                for m in range(0, n_ph):
+                    transformed_ints[n,m] =     self.ao_to_mo_tei(  integrals_to_transform[n,m], new_C_spinblocked)
+
+            return transformed_ints    
+                    
+                    
 
         def QEDCASCI_ENERGY(self):
             """
@@ -1010,26 +998,49 @@ class QED_CASCI_VLF:
             self.d_mo_temp = self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked)
 
             self.g_mo =  self.transform_two_body_VLF( self.ao_to_mo_tei(self.I_ao, self.C_ao_non_spin_blocked) , self.lang_firsov_params_spinblock, self.photon_basis_size)
+
             self.d_two_body =  self.transform_two_body_VLF(self.ao_to_mo_tei(self.d_two_body_ao, self.C_ao_non_spin_blocked) , self.lang_firsov_params_spinblock, self.photon_basis_size)
+
             self.h_mo =  self.transform_one_body_VLF(self.ao_to_mo(self.h_ao, self.C_ao_non_spin_blocked), self.lang_firsov_params_spinblock, self.photon_basis_size)  
-            
-            #print("d ao shape; ", self.d_ao.shape)
+
             self.d_mo =  self.transform_one_body_VLF( self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked) , self.lang_firsov_params_spinblock, self.photon_basis_size)   
-            self.q_mo =  self.transform_one_body_VLF( self.ao_to_mo(self.q_ao, self.C_ao_non_spin_blocked), self.lang_firsov_params_spinblock, self.photon_basis_size)  
-            #self.d_mo_non_spin_blocked =  self.transform_one_body_VLF_non_spinblocked( self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked) , self.lang_firsov_params, self.photon_basis_size, self.C_ao_non_spin_blocked)   
+
+            self.q_mo =  self.transform_one_body_VLF( self.ao_to_mo(self.q_ao, self.C_ao_non_spin_blocked), self.lang_firsov_params_spinblock, self.photon_basis_size) 
+
             self.d_lang_firsov_one_body= self.transform_one_body_VLF_d_lang_firsov( self.d_mo_temp, self.lang_firsov_params_spinblock, self.photon_basis_size)
-            
+
+            self.d_lang_firsov_two_body = self.transform_two_body_VLF_d_lang_firsov( torch.einsum( 'pq,rs->pqrs' , torch.kron(torch.eye(2), self.d_mo_temp.contiguous()).contiguous() , torch.kron(torch.eye(2),self.lang_firsov_param_matrix.contiguous()).contiguous()  ).contiguous(), self.lang_firsov_params_spinblock, self.photon_basis_size)
 
             self.d_mo_b_dag_plus_b = self.transform_hamiltonian_with_bdagplusb(self.ao_to_mo(self.d_ao, self.C_ao_non_spin_blocked) , self.lang_firsov_params_spinblock, self.photon_basis_size)
 
             self.lang_firsov_sq = torch.einsum('pq, pq -> pq', self.lang_firsov_param_matrix_spinblock, self.lang_firsov_param_matrix_spinblock)
 
+            # self.lang_firsov_two_body =  self.spin_block_tei_torch(self.lang_firsov_two_body.contiguous()).contiguous()
+            # self.lang_firsov_two_body =  torch.einsum("pq,rs -> pqrs" ,self.lang_firsov_param_matrix_spinblock,self.lang_firsov_param_matrix_spinblock)
+            self.lang_firsov_two_body =  torch.einsum("pq,rs -> pqrs" ,self.lang_firsov_param_matrix,self.lang_firsov_param_matrix)
+            self.lang_firsov_two_body =  self.spin_block_tei_torch(self.lang_firsov_two_body.contiguous()).contiguous()
 
-            # # Collect all index-value pairs
-            indices = []
-            values = []
 
-            self.H_PF = torch.zeros((self.basis_size, self.basis_size) , dtype= torch.double, requires_grad=True)
+
+            # self.g_mo =  self.transform_photon_transformed_integrals_to_new_orbital_basis_twobody(self.g_mo, self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.d_two_body =  self.transform_photon_transformed_integrals_to_new_orbital_basis_twobody(self.d_two_body, self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.d_lang_firsov_two_body =  self.transform_photon_transformed_integrals_to_new_orbital_basis_twobody(self.d_lang_firsov_two_body, self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.lang_firsov_two_body = self.ao_to_mo_tei(self.lang_firsov_two_body, self.d_vecs_transformation_spinblock.T)
+
+            # self.h_mo =  self.transform_photon_transformed_integrals_to_new_orbital_basis_onebody(self.h_mo,  self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.d_mo =  self.transform_photon_transformed_integrals_to_new_orbital_basis_onebody(self.d_mo,  self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.q_mo =  self.transform_photon_transformed_integrals_to_new_orbital_basis_onebody(self.q_mo,  self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.d_lang_firsov_one_body =  self.transform_photon_transformed_integrals_to_new_orbital_basis_onebody(self.d_lang_firsov_one_body,  self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+            # self.d_mo_b_dag_plus_b =  self.transform_photon_transformed_integrals_to_new_orbital_basis_onebody(self.d_mo_b_dag_plus_b,  self.d_vecs_transformation_spinblock.T, self.photon_basis_size)
+        
+            # self.lang_firsov_sq = self.ao_to_mo(self.lang_firsov_sq,  self.d_vecs_transformation_spinblock.T)
+            # self.lang_firsov_param_matrix_spinblock =  self.ao_to_mo(self.lang_firsov_param_matrix_spinblock,  self.d_vecs_transformation_spinblock.T)
+
+
+
+
+
+            self.H_PF = torch.zeros((self.basis_size, self.basis_size) , dtype= torch.double, requires_grad=False)
 
             counter = 0
 
@@ -1037,10 +1048,11 @@ class QED_CASCI_VLF:
             print("singles; " , self.singles)
             print("reference; ", self.reference)
 
+
             for i in range(self.basis_size):
                 for j in range(i, self.basis_size):
 
-                    total_val = torch.zeros(1, dtype=torch.float64, requires_grad=True)[0]
+                    total_val = torch.zeros(1, dtype=torch.float64, requires_grad=False)[0]
 
                     #pick out phootonic and electronic parts of basis
                     photon_basis_i = self.coupled_basis[i][1]
@@ -1048,16 +1060,16 @@ class QED_CASCI_VLF:
                     el_basis_i =self.coupled_basis[i][0]
                     el_basis_j = self.coupled_basis[j][0]
 
-                    total_diff = QED_CASCI_VLF.compute_diff(tuple(el_basis_i),tuple(el_basis_j))
+                    total_diff = QED_CASCI_LF.compute_diff(tuple(el_basis_i),tuple(el_basis_j))
                     photon_diff = photon_basis_i - photon_basis_j
                     #print(photon_diff)
                     phase = 1
 
                     #if photon_diff == 0 or photon_diff==1 or photon_diff==-1:
                     if total_diff == 0 or total_diff == 2 or total_diff == 4:
-                            phase = QED_CASCI_VLF.compute_phase_factor(tuple(el_basis_i),tuple(el_basis_j))
+                            phase = QED_CASCI_LF.compute_phase_factor(tuple(el_basis_i),tuple(el_basis_j))
 
-                    phase = torch.tensor(phase, dtype=torch.float64, requires_grad=True)
+                    phase = torch.tensor(phase, dtype=torch.float64, requires_grad=False)
         
                     #singles don't couple to reference, brilluuions theorem, not true for some cases of C
                     # if (el_basis_i in self.singles and el_basis_j == self.reference) or (el_basis_j in self.singles and el_basis_i == self.reference):
@@ -1066,101 +1078,79 @@ class QED_CASCI_VLF:
                     #everything else
                     else:
 
-                        #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                        #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
                         val = 0
 
                         #regular electronic hamiltonian part
                         if total_diff ==0 or total_diff==2 or total_diff ==4:
-                            val = val + (QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.h_mo[photon_basis_i, photon_basis_j],tuple(el_basis_i),tuple(el_basis_j), norbs) +  QED_CASCI_VLF.CASCI_VLF.slater_condon_two_body(total_diff, self.g_mo[photon_basis_i, photon_basis_j],tuple(el_basis_i),tuple(el_basis_j),norbs))
+                            val = val + (QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.h_mo[photon_basis_i, photon_basis_j],tuple(el_basis_i),tuple(el_basis_j), norbs) +  QED_CASCI_LF.CASCI_VLF.slater_condon_two_body(total_diff, self.g_mo[photon_basis_i, photon_basis_j],tuple(el_basis_i),tuple(el_basis_j),norbs))
                             val= val*phase
                         else:
                             val = val + 0
                         total_val = total_val + val
 
-                        val = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                        val = torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
                         #dse part
                         if total_diff ==0 or total_diff==2 or total_diff ==4:
-                            val = val +( QED_CASCI_VLF.CASCI_VLF.slater_condon_two_body(total_diff, self.d_two_body[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j),norbs) - 1 * QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.q_mo[ photon_basis_i, photon_basis_j],tuple(el_basis_i),tuple(el_basis_j),  norbs) )
-                            val= val  + 2 * self.d_n * QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.d_mo[ photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j), norbs) 
+                            val = val +( QED_CASCI_LF.CASCI_VLF.slater_condon_two_body(total_diff, self.d_two_body[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j),norbs) - 1 * QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.q_mo[ photon_basis_i, photon_basis_j],tuple(el_basis_i),tuple(el_basis_j),  norbs) )
+                            val= val  + 2 * self.d_n * QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.d_mo[ photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j), norbs) 
                             if total_diff ==0  and photon_diff == 0:
                                 val = val +self.d_n **2  
                             val= val*phase
                         else:
                             val = 0
-                            #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                            #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
 
                         total_val = total_val +  0.5 * val
 
-                        #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                        #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
                         val = 0
                         #blc part
                         if total_diff ==0 or total_diff==2 or total_diff==4:
 
-                            val = val +( QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.d_mo_b_dag_plus_b[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j), norbs) ) #* (a_dag + a)[photon_basis_i, photon_basis_j]
-                            val=val + -2*(QED_CASCI_VLF.CASCI_VLF.slater_condon_two_body_kinda(total_diff, self.d_mo[photon_basis_i, photon_basis_j], self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs) ) 
-                            val = val + -2 * (QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.d_lang_firsov_one_body[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j),norbs))
+                            val = val +( QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.d_mo_b_dag_plus_b[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j), norbs) ) 
+                            val=val + -2*(QED_CASCI_LF.CASCI_VLF.slater_condon_two_body_kinda(total_diff, self.d_lang_firsov_two_body[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j), norbs) ) 
+                            val = val + -2 * (QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.d_lang_firsov_one_body[photon_basis_i, photon_basis_j], tuple(el_basis_i),tuple(el_basis_j),norbs))
 
                             if total_diff ==0:
                                 val = val + self.d_n * (self.a_dag_plus_a [photon_basis_i, photon_basis_j])
 
                             if photon_diff == 0 and total_diff == 0:
-                                val = val + self.d_n * ( - 2* (QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs) ))
+                                val = val + self.d_n * ( - 2* (QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs) ))
                             val = val*phase 
                         else:
-                            #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                            #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
                             val = 0
 
                         total_val = total_val+  (- np.sqrt(self.omega/2)* val)
 
                         #cav
-                        #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                        #val = torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
                         val = 0
 
                         if total_diff == 0:
                             val = val +(self.a_dag_mult_a[photon_basis_i,photon_basis_j])
                         if total_diff ==0:
-                            val = val +(-  self.a_dag[photon_basis_i,photon_basis_j]  * QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs)) 
-                            val =val + (-  self.a[photon_basis_i,photon_basis_j]  * QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs)) 
-                            #val =val + (-  self.a_dag_plus_a[photon_basis_i,photon_basis_j]  * QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs)) 
+                            val = val +(-  self.a_dag[photon_basis_i,photon_basis_j]  * QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs)) 
+                            val =val + (-  self.a[photon_basis_i,photon_basis_j]  * QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs)) 
+                            #val =val + (-  self.a_dag_plus_a[photon_basis_i,photon_basis_j]  * QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs)) 
                             
                         if photon_diff == 0 and ( total_diff ==0 ):
                             
-                            val = val +(QED_CASCI_VLF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_sq,tuple(el_basis_i),tuple(el_basis_j), norbs ))
-                            val = val + (QED_CASCI_VLF.CASCI_VLF.slater_condon_two_body_kinda(total_diff, self.lang_firsov_param_matrix_spinblock, self.lang_firsov_param_matrix_spinblock, tuple(el_basis_i),tuple(el_basis_j), norbs))
+                            val = val +(QED_CASCI_LF.CASCI_VLF.slater_condon_one_body(total_diff, self.lang_firsov_sq,tuple(el_basis_i),tuple(el_basis_j), norbs ))
+                            val = val + (QED_CASCI_LF.CASCI_VLF.slater_condon_two_body_kinda(total_diff, self.lang_firsov_two_body, tuple(el_basis_i),tuple(el_basis_j), norbs))
                             
                         val = val* phase
                         total_val =total_val +  self.omega *  val
 
-
-                        # if i!=j:
-                        #     self.H_PF[i,j] += total_val
-                        #     self.H_PF[j,i] += self.H_PF[j,i]+total_val
-                        # elif i==j:
-                        #     self.H_PF[i,j] += self.H_PF[i,j]+total_val
-
-                    if i!=j:
-                        indices.append([i, j])
-                        values.append(total_val)
-                        indices.append([j,i])
-                        values.append(total_val)
-
-                    if i==j:
-                        indices.append([i, i])
-                        values.append(total_val)
-
+                        if i!=j:
+                            self.H_PF[i,j] = self.H_PF[i,j]+total_val
+                            self.H_PF[j,i] = self.H_PF[j,i]+total_val
+                        if i==j:
+                            self.H_PF[i,j] = self.H_PF[i,j]+total_val
 
                     #print("/n")
                     counter +=1
-                        
-
-            # Apply scatter once
-            # Convert lists to tensors
-            indices = torch.tensor(indices, dtype=torch.long).T  # Shape (2, num_elements)
-            #print(indices)
-            values = torch.stack(values)  # Shape (num_elements,)
-            ## Use index_put to update H_PF
-            self.H_PF = self.H_PF.index_put((indices[0], indices[1]), values)
-
 
             vals, vecs  = torch.linalg.eigh(self.H_PF)
 
@@ -1227,7 +1217,7 @@ class QED_CASCI_VLF:
 
             if total_diff == 0:
 
-                #two_body =  torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                #two_body =  torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
 
                 beta1_shifted = [b+norbs for b in beta1]
                 beta2_shifted = [b+norbs for b in beta2]
@@ -1266,7 +1256,7 @@ class QED_CASCI_VLF:
                     k, l = l, k
                     # print(f"swapped {k}, {l}")
 
-                two_body =  torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                two_body =  torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
                 
 
                 alpha1 = list(alpha1)
@@ -1321,51 +1311,36 @@ class QED_CASCI_VLF:
             else:
                 return 0.0
 
-
         @staticmethod
-        def slater_condon_two_body_kinda(total_diff, d_mo, lang_firsov_params_matrix, det1, det2, norbs):
+        def slater_condon_two_body_kinda(total_diff, g_mo, det1, det2, norbs):
             alpha1, beta1 = det1
             alpha2, beta2 = det2
+
 
             # Find the differences between alpha and beta orbitals separately
             diff_alpha = list(set(alpha1).symmetric_difference(set(alpha2)))
             diff_beta = list(set(beta1).symmetric_difference(set(beta2)))
 
-            same_alpha = list(set(alpha1).intersection(set(alpha2)))
-            same_beta = list(np.array(list(set(beta1).intersection(set(beta2))) )+ norbs)
-            # print("same alpha: ", same_alpha,)
-            # print("same beta: ", same_beta)
-
-            same_in_both = set(same_alpha).union(set(same_beta))
-
             if total_diff == 0:
 
-                # Diagonal element
-                one_body  =  torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                #two_body =  torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
 
-                for i in alpha1:
-                    lambda_sum  =  torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-                    for r in same_in_both:
-                        if r != i:
-                            lambda_sum = lambda_sum + lang_firsov_params_matrix[r,r]
+                beta1_shifted = [b+norbs for b in beta1]
+                beta2_shifted = [b+norbs for b in beta2]
 
-                    one_body = one_body + d_mo[i,i] * lambda_sum
-                    
-
-                for j in beta1:
-                    j_ = j+norbs
-                    lambda_sum  =  torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-                    for r in same_in_both:
-                        if r != j_:
-                            lambda_sum = lambda_sum + lang_firsov_params_matrix[r,r]
-                    one_body = one_body + d_mo[j_,j_] * lambda_sum
-
-                return one_body 
-
+                alpha1 = list(alpha1)
+                alpha2 = list(alpha2)
+                
+                two_body = 0.5 * torch.einsum('ijij->', g_mo[alpha1][:, alpha2][:, :, alpha1][:, :, :, alpha2])
+                two_body = two_body+  0.5 * torch.einsum('ijij->', g_mo[beta1_shifted][:, beta2_shifted ][:, :, beta1_shifted][:, :, :, beta2_shifted ])
+                two_body = two_body+  0.5 * torch.einsum('ijij->', g_mo[alpha1][:,  beta2_shifted][:, :, alpha1][:, :, :,  beta2_shifted])
+                two_body = two_body+  0.5 * torch.einsum('ijij->', g_mo[alpha2][:, beta1_shifted][:, :, alpha2][:, :, :, beta1_shifted])
+                
+                return two_body
 
             elif total_diff == 2:
 
-                one_body  =  torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
+                # print("single excitation ")
 
                 # Find the orbitals that differ
                 if len(diff_alpha) == 2:
@@ -1377,39 +1352,37 @@ class QED_CASCI_VLF:
                 else:
                     k, l = diff_alpha[0], diff_beta[0]
                     l = l+norbs
-                #print("k: ", k)
-                #print("l: ", l)
-                # Ensure k is in det1 and l is in det2
-                orbs1 = alpha1 + tuple([b+norbs for b in beta1])
-                orbs2 = alpha2 + tuple([b+norbs for b in beta2])
-            
-                beta1 = tuple([b+norbs for b in beta1])
-                beta2 =tuple([b+norbs for b in beta2])
-                # Ensure k is in det1 and l is in det2
-                if k not in alpha1 + beta1 or l not in  alpha2 + beta2:
+
+
+                #adding these two lines for testing
+                beta1_shifted = tuple([b+norbs for b in beta1])
+                beta2_shifted =tuple([b+norbs for b in beta2])
+                # Ensure k is in det1 and l is in det2, had to modify this also
+                if k not in alpha1 + beta1_shifted or l not in  alpha2 + beta2_shifted:
                     k, l = l, k
+                    # print(f"swapped {k}, {l}")
 
+                two_body =  torch.tensor(0.0, dtype=torch.float64, requires_grad=False)
+                
 
-                for r in same_in_both:
-                    if r != k and r!= l:
-                        one_body = one_body+  d_mo[k,l] * lang_firsov_params_matrix[r,r]
-                return one_body
-            else: 
+                alpha1 = list(alpha1)
+                alpha2 = list(alpha2)
+                beta1_shifted = [b+norbs for b in beta1]
+                beta2_shifted =[b+norbs for b in beta2]
+
+                # First create a mask for i != k
+                alpha1_filtered = [i for i in alpha1 if i != k]
+                # Then use einsum
+                two_body = torch.einsum('i->', g_mo[k, alpha1_filtered, l, alpha1_filtered])
+                # First create a mask for i != k
+                beta1_filtered = [i for i in beta1_shifted if i != k]
+                # Then use einsum
+                two_body = two_body + torch.einsum('i->', g_mo[k, beta1_filtered, l, beta1_filtered])
+                
+                return two_body
+
+            else:
                 return 0.0
-
-
-        @staticmethod
-        def lambda_two_body(lambda_vec, det, norbs):
-            alpha, beta = det
-            all_occ = list(alpha) + [x + norbs for x in beta]  # Combine alpha and beta orbitals
-            two_body = torch.tensor(0.0, dtype=torch.float64, requires_grad=True)
-
-            for i in all_occ:
-                for j in all_occ:
-                    if i != j:
-                        two_body =  two_body + lambda_vec[i] * lambda_vec[j]
-
-            return two_body
 
 
 
