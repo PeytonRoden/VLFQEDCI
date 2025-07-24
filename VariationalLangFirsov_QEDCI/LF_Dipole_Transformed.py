@@ -369,7 +369,6 @@ class QED_CASCI_LF:
 
             self.qedhf.qed_hf(lambda_vector)
 
-            #I in chemist notation here but we convert it to physicist and antisymmetrtize
             self.ndocc = self.qedhf.ndocc
 
             
@@ -452,7 +451,6 @@ class QED_CASCI_LF:
             basis = [tuple([tuple(reference[0]), tuple(reference[1])])   ]
 
 
-            #we have to make sure singles don't couple to reference
             #singles = CI.generate_excited_determinants(reference, virtual, 1)
             self.singles = QED_CASCI_LF.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N= 1)
 

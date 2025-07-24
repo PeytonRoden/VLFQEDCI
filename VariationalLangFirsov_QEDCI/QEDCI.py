@@ -23,8 +23,6 @@ class CASCI:
 
     qedhfdict = self.qedhf.qed_hf(self.lambda_vector)
 
-
-    #I in physicists but we convert it to chemists
     self.ndocc = self.qedhf.ndocc
 
     #qedhf C, dipole basis C, or regular hf C
@@ -84,10 +82,9 @@ class CASCI:
     self.h_mo = CASCI.ao_to_mo(h_spinblock_ao, self.C)
     self.q_mo = CASCI.ao_to_mo(q_spinblock_ao, self.C)
 
-    #don't have to scale off diag elements by two for this one
     self.d_mo = CASCI.ao_to_mo(d_spinblock_ao, self.C)
 
-    #d_spinblock_ao_tb = CASCI.spin_block_tei(d_ao_two_body) 
+     #d_spinblock_ao_tb = CASCI.spin_block_tei(d_ao_two_body) 
     d_spinblock_ao_tb = CASCI.spin_block_tei(self.d_two_body) 
     #print(d_spinblock_ao_tb)
     self.d_antisym_2_body =  d_spinblock_ao_tb.transpose(0, 2, 1, 3)  -  d_spinblock_ao_tb.transpose(0, 2, 3, 1)
@@ -623,7 +620,6 @@ class CASCI:
     basis = [tuple([tuple(reference[0]), tuple(reference[1])])   ]
 
 
-    #we have to make sure singles don't couple to reference
     #singles = CASCI.generate_excited_determinants(reference, virtual, 1)
     singles = CASCI.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N= 1)
 

@@ -433,7 +433,6 @@ class QED_CASCI_VLF_ORBITAL_ROTATION:
 
             self.qedhf.qed_hf(lambda_vector)
 
-            #I in chemist notation here but we convert it to physicist and antisymmetrtize
             self.ndocc = self.qedhf.ndocc
 
             

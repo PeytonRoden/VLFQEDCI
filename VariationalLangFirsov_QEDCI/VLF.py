@@ -524,7 +524,6 @@ class QED_CASCI_VLF:
             basis = [tuple([tuple(reference[0]), tuple(reference[1])])   ]
 
 
-            #we have to make sure singles don't couple to reference
             #singles = CI.generate_excited_determinants(reference, virtual, 1)
             self.singles = QED_CASCI_VLF.generate_active_space_excited_determinants(active_reference=active_ref, active_virtual_orbitals=active_virtual, inactive_reference=inactive_ref, N= 1)
 
